@@ -311,6 +311,7 @@ class ControlLDM(LatentDiffusion):
 
     def __init__(self, control_stage_config, control_key, only_mid_control, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # H control_model 初始化的地方
         self.control_model = instantiate_from_config(control_stage_config)
         self.control_key = control_key
         self.only_mid_control = only_mid_control
@@ -331,6 +332,8 @@ class ControlLDM(LatentDiffusion):
         assert isinstance(cond, dict)
         diffusion_model = self.model.diffusion_model
 
+        # H control_model执行的唯一位置
+        # H cldm control latent diffusion models.有控制的潜在扩散模型; 有条件图片生成类的stable diffusion model;
         cond_txt = torch.cat(cond['c_crossattn'], 1)
 
         if cond['c_concat'] is None:

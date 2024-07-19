@@ -144,14 +144,23 @@ def export_decoder_model():
 
     print("======================= Decoder  onnx2trt done!")
 
+def export_yolov5_model():
+    onnx_path = "./onnx/yolov5.onnx"
+    plan_path = "./engine/yolov5.plan"
 
+    # 1. 统一min_shape\opt_shape\max_shape; 2. 使用FP16
+    onnx2trt(onnx_path, plan_path, [(1, 3, 640, 640)], [(1, 3, 640, 640)], [(1, 3, 640, 640)], use_fp16=False)
 
+    print("======================= Model yolov5 done!")
+
+    plan_path = "./engine/yolov5_fp16.plan"
+    # 1. 统一min_shape\opt_shape\max_shape; 2. 使用FP16
+    onnx2trt(onnx_path, plan_path, [(1, 3, 640, 640)], [(1, 3, 640, 640)], [(1, 3, 640, 640)], use_fp16=True)
+
+    print("======================= Model yolov5 done!")
 
 def main():
-    export_clip_model()
-    export_control_net_model()
-    export_controlled_unet_model()
-    export_decoder_model()
+    export_yolov5_model()
 
 if __name__ == '__main__':
     main()
