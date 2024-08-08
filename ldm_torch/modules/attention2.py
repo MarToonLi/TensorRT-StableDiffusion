@@ -6,7 +6,7 @@ from torch import nn, einsum
 from einops import rearrange, repeat
 from typing import Optional, Any
 
-# from ldm.modules.diffusionmodules.util import checkpoint
+from ldm.modules.diffusionmodules.util import checkpoint
 
 
 try:
@@ -142,7 +142,7 @@ class SpatialSelfAttention(nn.Module):
         return x+h_
 
 
-class CrossAttention3(nn.Module):
+class CrossAttention(nn.Module):
     def __init__(self, query_dim, context_dim=None, heads=8, dim_head=64, dropout=0.):
         super().__init__()
         inner_dim = dim_head * heads
@@ -169,10 +169,6 @@ class CrossAttention3(nn.Module):
         v = self.to_v(context)
 
         q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> (b h) n d', h=h), (q, k, v))
-
-        print("--q.shape: {}".format(q.shape))
-        print("--k.shape: {}".format(k.shape))
-        print("--v.shape: {}".format(v.shape))
 
         # force cast to fp32 to avoid overflowing
         if _ATTN_PRECISION =="fp32":
@@ -201,160 +197,57 @@ class CrossAttention3(nn.Module):
 class CrossAttention2(nn.Module):
     def __init__(self, query_dim, context_dim=None, heads=8, dim_head=64, dropout=0.):
         super().__init__()
-        inner_dim = dim_head * heads; context_dim = default(context_dim, query_dim)
-        self.scale = dim_head ** -0.5; self.heads = heads
-        self.to_qkv = nn.Linear(query_dim, inner_dim * 3, bias=False)
-        self.to_q = nn.Linear(query_dim,   inner_dim, bias=False)
-        self.to_k = nn.Linear(context_dim, inner_dim, bias=False)
-        self.to_v = nn.Linear(context_dim, inner_dim, bias=False)
+        inner_dim = dim_head * heads
+        context_dim = default(context_dim, query_dim)
 
-        with torch.no_grad():
-            if query_dim == context_dim:
-                q_weight = self.to_q.weight
-                k_weight = self.to_k.weight
-                v_weight = self.to_v.weight
-                print("q_weight: ",q_weight.shape)
-                print("k_weight: ",k_weight.shape)
-                print("v_weight: ",v_weight.shape)
-                qkv_weight = torch.cat((q_weight, k_weight, v_weight), dim=0)
-                print("qkv_weight: ",qkv_weight.shape)
-                print("-----------")
+        self.scale = dim_head ** -0.5
+        self.heads = heads
 
-                self.to_qkv.weight.copy_(qkv_weight)
+        # self.to_q = nn.Linear(query_dim, inner_dim, bias=False)
+        # self.to_k = nn.Linear(context_dim, inner_dim, bias=False)
+        # self.to_v = nn.Linear(context_dim, inner_dim, bias=False)
+
+        self.to_qkv = nn.Linear(query_dim + context_dim + context_dim, inner_dim, bias=False)
 
         self.to_out = nn.Sequential(
             nn.Linear(inner_dim, query_dim),
             nn.Dropout(dropout)
         )
+
     def forward(self, x, context=None, mask=None):
-        print("x.shape: {}".format(x.shape))
         h = self.heads
+
         if context is None and torch.onnx.is_in_onnx_export():
-            qkv = self.to_qkv(x)
-            print("qkv.shape: {}".format(qkv.shape))
-            q, k, v = torch.chunk(qkv, 3, dim=-1)
+            qkv = self.qkv(x)
+            q, k, v = torch.chunk(qkv, 3, dim=0)
 
-            print("--q.shape: {}".format(q.shape))
-            print("--k.shape: {}".format(k.shape))
-            print("--v.shape: {}".format(v.shape))
-
-        else:
-            q = self.to_q(x); context = default(context, x)
-            k = self.to_k(context); v = self.to_v(context)
-
-            print("++q.shape: {}".format(q.shape))
-            print("++k.shape: {}".format(k.shape))
-            print("++v.shape: {}".format(v.shape))
+        else: # 训练逻辑
+            q = self.to_q(x)
+            context = default(context, x)
+            k = self.to_k(context)
+            v = self.to_v(context)
 
         q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> (b h) n d', h=h), (q, k, v))
+
+        # force cast to fp32 to avoid overflowing
         if _ATTN_PRECISION =="fp32":
             with torch.autocast(enabled=False, device_type = 'cuda'):
                 q, k = q.float(), k.float()
                 sim = einsum('b i d, b j d -> b i j', q, k) * self.scale
         else:
             sim = einsum('b i d, b j d -> b i j', q, k) * self.scale
+
         del q, k
+
         if exists(mask):
             mask = rearrange(mask, 'b ... -> b (...)')
             max_neg_value = -torch.finfo(sim.dtype).max
             mask = repeat(mask, 'b j -> (b h) () j', h=h)
             sim.masked_fill_(~mask, max_neg_value)
+
+        # attention, what we cannot get enough of
         sim = sim.softmax(dim=-1)
-        out = einsum('b i j, b j d -> b i d', sim, v)
-        out = rearrange(out, '(b h) n d -> b n (h d)', h=h)
-        return self.to_out(out)
 
-
-class CrossAttention(nn.Module):
-    def __init__(self, query_dim, context_dim=None, heads=8, dim_head=64, dropout=0.):
-        super().__init__()
-        context_dim_copy = context_dim
-
-        inner_dim = dim_head * heads; context_dim = default(context_dim, query_dim)
-        self.scale = dim_head ** -0.5; self.heads = heads
-        self.to_qkv = nn.Linear(query_dim, inner_dim * 3, bias=False)
-        self.to_q = nn.Linear(query_dim,   inner_dim, bias=False)
-        self.to_k = nn.Linear(context_dim, inner_dim, bias=False)
-        self.to_v = nn.Linear(context_dim, inner_dim, bias=False)
-        self.head_dim = dim_head
-
-        print("context_dim: {};".format(context_dim))
-        with torch.no_grad():
-            if query_dim == context_dim:
-                q_weight = self.to_q.weight
-                k_weight = self.to_k.weight
-                v_weight = self.to_v.weight
-
-                print("q_weight: {}; k_weight: {}; v_weight: {};".format(q_weight.shape, k_weight.shape, v_weight.shape))
-
-                qkv_weight = torch.cat((q_weight, k_weight, v_weight), dim=0)
-                print("qkv_weight: ",qkv_weight.shape)
-                print("-----------")
-
-                self.to_qkv.weight.copy_(qkv_weight)
-            else:
-                print("nothing to do!")
-        print("==================================================")
-        self.to_out = nn.Sequential(
-            nn.Linear(inner_dim, query_dim),
-            nn.Dropout(dropout)
-        )
-    def forward(self, x, context=None, mask=None):
-        print("x.shape: {}".format(x.shape))
-
-        batch_size, seq_length, embed_dim = x.size()
-        mark = context.shape if context is not None else 0
-        print("context: {}".format(mark))
-        print("is_in_onnx_export: {}".format(torch.onnx.is_in_onnx_export()))
-
-        h = self.heads
-        # if context is None:
-        if context is None:
-            qkv = self.to_qkv(x)  # (batch_size, seq_length, embed_dim * 3)
-            qkv = qkv.reshape(batch_size, seq_length, 3, self.heads, self.head_dim)
-            qkv = qkv.permute(2, 0, 3, 1, 4)  # (3, batch_size, num_heads, seq_length, head_dim)
-
-            # 分离 Q, K, V
-            q, k, v = qkv[0], qkv[1], qkv[2]
-
-            q = torch.squeeze(q, dim=0)
-            k = torch.squeeze(k, dim=0)
-            v = torch.squeeze(v, dim=0)
-
-            print("--qkv.shape: {}; --q.shape: {}; --k.shape: {}; --v.shape: {}".format(qkv.shape, q.shape, k.shape, v.shape))
-
-        else:
-            q = self.to_q(x); context = default(context, x)
-            k = self.to_k(context); v = self.to_v(context)
-
-            # q_weight: torch.Size([512, 64])
-            # k_weight: torch.Size([512, 64])
-            # v_weight: torch.Size([512, 64])
-            # qkv_weight: torch.Size([1536, 64])
-            # -----------
-            # x.shape: torch.Size([1, 10, 64])
-            # ++q.shape: torch.Size([8, 10, 64])
-            # ++k.shape: torch.Size([8, 15, 64])
-            # ++v.shape: torch.Size([8, 15, 64])
-            # output.shape: torch.Size([1, 10, 64])
-            print("++q.shape: {}; ++k.shape: {}; ++v.shape: {}".format(q.shape, k.shape, v.shape))
-
-            q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> (b h) n d', h=h), (q, k, v))
-            print("++q.shape: {}; ++k.shape: {}; ++v.shape: {}".format(q.shape, k.shape, v.shape))
-
-        if _ATTN_PRECISION =="fp32":
-            with torch.autocast(enabled=False, device_type = 'cuda'):
-                q, k = q.float(), k.float()
-                sim = einsum('b i d, b j d -> b i j', q, k) * self.scale
-        else:
-            sim = einsum('b i d, b j d -> b i j', q, k) * self.scale
-        del q, k
-        if exists(mask):
-            mask = rearrange(mask, 'b ... -> b (...)')
-            max_neg_value = -torch.finfo(sim.dtype).max
-            mask = repeat(mask, 'b j -> (b h) () j', h=h)
-            sim.masked_fill_(~mask, max_neg_value)
-        sim = sim.softmax(dim=-1)
         out = einsum('b i j, b j d -> b i d', sim, v)
         out = rearrange(out, '(b h) n d -> b n (h d)', h=h)
         return self.to_out(out)
@@ -505,22 +398,3 @@ class SpatialTransformer(nn.Module):
             x = self.proj_out(x)
         return x + x_in
 
-if __name__ == '__main__':
-    # Example usage
-    query_dim = 64
-    context_dim = 64
-    heads = 8
-    dim_head = 64
-    dropout = 0.1
-    batch = 2
-
-    # model = CrossAttention3(query_dim, context_dim, heads, dim_head, dropout)
-    model = CrossAttention(query_dim, context_dim, heads, dim_head, dropout)
-
-    x = torch.randn(batch, 10, query_dim)
-    context = torch.randn(batch, 15, context_dim)
-    mask = torch.ones(batch, 15).bool()
-
-    output = model(x, context, mask)
-    # output = model(x, None, None)
-    print("output.shape: {}".format(output.shape))

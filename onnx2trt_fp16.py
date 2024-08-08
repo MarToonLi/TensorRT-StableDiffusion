@@ -81,10 +81,10 @@ def onnx2trt(onnxFile, plan_name, min_shapes, opt_shapes, max_shapes, max_worksp
 
 def export_clip_model():
     onnx_path = "./onnx/CLIP.onnx"
-    plan_path = "./engine/CLIP.plan"
+    plan_path = "./engine_fp16/CLIP.plan"
 
     # 1. 统一min_shape\opt_shape\max_shape为77; 2. 使用FP16
-    onnx2trt(onnx_path, plan_path, [(1, 77)], [(1, 77)], [(1, 77)], use_fp16=False)
+    onnx2trt(onnx_path, plan_path, [(1, 77)], [(1, 77)], [(1, 77)], use_fp16=True)
 
     print("======================= CLIP onnx2trt done!")
 
@@ -93,14 +93,14 @@ def export_control_net_model():
         return [(B, 4, 32, 48), (B, 3, 256, 384), tuple([B]), (B, S, 768)]
 
     onnx_path = "./onnx/ControlNet.onnx"
-    plan_path = "./engine/ControlNet.plan"
+    plan_path = "./engine_fp16/ControlNet.plan"
 
     # 1. 统一min_shape\opt_shape\max_shape为77; 2. 使用FP16
     onnx2trt(onnx_path, plan_path,
              get_shapes(1, 77),
              get_shapes(1, 77),
              get_shapes(1, 77),
-             use_fp16=False)
+             use_fp16=True)
 
     print("======================= ControlNet onnx2trt done!")
 
@@ -124,23 +124,23 @@ def export_controlled_unet_model():
     onnx_path = "./onnx/ControlledUnet"
     onnx_path = onnx_path + "/ControlledUnet.onnx"
 
-    plan_path = "./engine/ControlledUnet.plan"
+    plan_path = "./engine_fp16/ControlledUnet.plan"
 
     # 1. 统一min_shape\opt_shape\max_shape为77; 2. 使用FP16
     onnx2trt(onnx_path, plan_path,
              get_shapes(1, 77),
              get_shapes(1, 77),
              get_shapes(1, 77),
-             use_fp16=False)
+             use_fp16=True)
 
     print("======================= ControlNet onnx2trt done!")
 
 def export_decoder_model():
     onnx_path = "./onnx/Decoder.onnx"
-    plan_path = "./engine/Decoder.plan"
+    plan_path = "./engine_fp16/Decoder.plan"
 
     # 1. 统一min_shape\opt_shape\max_shape; 2. 使用FP16
-    onnx2trt(onnx_path, plan_path, [(1, 4, 32, 48)], [(1, 4, 32, 48)], [(1, 4, 32, 48)], use_fp16=False)
+    onnx2trt(onnx_path, plan_path, [(1, 4, 32, 48)], [(1, 4, 32, 48)], [(1, 4, 32, 48)], use_fp16=True)
 
     print("======================= Decoder  onnx2trt done!")
 

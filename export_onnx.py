@@ -66,7 +66,7 @@ class hackathon():
     def initialize(self):
         self.apply_canny = CannyDetector()
         self.model = create_model('./models/cldm_v15.yaml').cpu()
-        self.model.load_state_dict(load_state_dict('./models/control_sd15_canny.pth', location='cpu'))
+        self.model.load_state_dict(load_state_dict('./models/control_sd15_canny.pth', location='cpu'), strict=False)
         # self.model.load_state_dict(load_state_dict('/home/player/ControlNet/models/control_sd15_canny.pth', location='cuda'))
         self.model = self.model.cpu()
         self.model.eval()
@@ -97,7 +97,7 @@ def export_clip_model():
 
     clip_model.forward = types.MethodType(forward, clip_model)  # 更改torch模块的tensor入口函数
 
-    onnx_path = "./onnx/CLIP.onnx"  # torch.onnx.export参数
+    onnx_path = "./onnx2/CLIP.onnx"  # torch.onnx.export参数
 
     tokens = torch.zeros(1, 77, dtype=torch.int32)  # torch.onnx.export参数
     input_names = ["input_ids"]  # torch.onnx.export参数
@@ -144,7 +144,7 @@ def export_control_net_model():
     output_names = ["latent"]
 
     # H onnx模型输出
-    onnx_path = "./onnx/ControlNet.onnx"
+    onnx_path = "./onnx2/ControlNet.onnx"
 
     torch.onnx.export(
         control_net,
@@ -197,7 +197,7 @@ def export_controlled_unet_model():
         input_names.append("control" + str(i))
     output_names = ["latent"]
 
-    onnx_path = "./onnx/ControlledUnet"
+    onnx_path = "./onnx2/ControlledUnet"
     os.makedirs(onnx_path, exist_ok=True)
     onnx_path = onnx_path + "/ControlledUnet.onnx"
 
@@ -233,7 +233,7 @@ def export_decoder_model():
     latent = torch.randn(1, 4, 32, 48, dtype=torch.float32)
     input_names = ["latent"]
     output_names = ["images"]
-    onnx_path = "./onnx/Decoder.onnx"
+    onnx_path = "./onnx2/Decoder.onnx"
 
     torch.onnx.export(
         decode_model.cpu(),
@@ -254,10 +254,10 @@ def export_decoder_model():
 
 
 def main():
-    export_clip_model()
+    # export_clip_model()
     export_control_net_model()
-    export_controlled_unet_model()
-    export_decoder_model()
+    # export_controlled_unet_model()
+    # export_decoder_model()
 
 
 if __name__ == '__main__':
