@@ -68,9 +68,16 @@ class hackathon():
             torch.cuda.synchronize()
             start_time = time.time()
             x_samples = self.model.decode_first_stage(samples)
+<<<<<<< Updated upstream
             torch.cuda.synchronize()
             end_time = time.time()
             print(f"decode_first_stage time={(end_time-start_time)*1000}ms")
             x_samples = (einops.rearrange(x_samples, 'b c h w -> b h w c') * 127.5 + 127.5).cpu().numpy().clip(0, 255).astype(np.uint8)
+=======
+            x_samples = (einops.rearrange(x_samples, 'b c h w -> b h w c') * 127.5 + 127.5).cpu().numpy().clip(0,
+                                                                                                               255).astype(
+                np.uint8)
+>>>>>>> Stashed changes
+
             results = [x_samples[i] for i in range(num_samples)]
         return results
