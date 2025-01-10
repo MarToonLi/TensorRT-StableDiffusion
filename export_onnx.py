@@ -140,6 +140,9 @@ def export_control_net_model():
     timestep = torch.tensor([1], dtype=torch.int32)
     context = torch.randn(1, 77, 768, dtype=torch.float32)
 
+    print(x_nosiy.numpy().flatten()[:10])
+
+
     input_names = ["x_nosiy", "hint", "timestep", "context"]
     output_names = ["latent"]
 
