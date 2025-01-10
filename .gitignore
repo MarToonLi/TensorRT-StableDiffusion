@@ -148,3 +148,4 @@ models/*
 histogram/
 *.cache
 smoothquant/
+openai/
