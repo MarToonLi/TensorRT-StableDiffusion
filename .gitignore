@@ -18,6 +18,7 @@ __pycache__/
 *$py.class
 
 # C extensions
+*.so
 
 # Distribution / packaging
 .Python
@@ -27,8 +28,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/*
-lib64/*
+lib/
+lib64/
 parts/
 sdist/
 var/
@@ -142,9 +143,10 @@ dmypy.json
 .pyre/
 onnx/*
 engine/*
-models/*
+models
 *.log
 /*.jpg
-histogram/
-*.cache
-smoothquant/
+/.vs
+
+*.npz
+*.rar
